@@ -1,11 +1,12 @@
-# Use a Tomcat base image with JDK 17, which is a good choice for OpenMAINT 2.3
+# Use a Tomcat base image with JDK 17
 FROM tomcat:9.0.71-jdk17-temurin
 
 # Set the working directory to the Tomcat home
 WORKDIR $CATALINA_HOME
 
-# Define all environment variables at the top for clarity and easy modification
-ENV CMDBUILD_URL="https://sourceforge.net/projects/openmaint/files/2.3/openmaint-2.3-3.4.1-d.war/download" \
+# Define environment variables at the top for clarity
+# The CMDBUILD_URL has been changed to a direct download link
+ENV CMDBUILD_URL="https://downloads.sourceforge.net/project/openmaint/2.3/openmaint-2.3-3.4.1-d.war" \
     POSTGRES_USER="postgres" \
     POSTGRES_PASS="postgres" \
     POSTGRES_PORT="5432" \
@@ -14,49 +15,50 @@ ENV CMDBUILD_URL="https://sourceforge.net/projects/openmaint/files/2.3/openmaint
     CMDBUILD_DUMP="demo.dump.xz"
 
 # Install dependencies in a single `RUN` command to reduce image layers
-# `rm -rf /var/lib/apt/lists/*` is added to clean up the cache and keep the image small
-RUN apt-get update \
+# The `set -x` command is for debugging and can be removed in a final version
+RUN set -x \
+    && apt-get update \
     && apt-get install -y --no-install-recommends \
     postgresql-client \
     unzip \
     wget \
-    # Clean up the cache after installation to reduce image size
+    # Create necessary directories
+    && mkdir -p $CATALINA_HOME/conf/cmdbuild/ \
+    $CATALINA_HOME/webapps/cmdbuild/ \
+    /usr/local/bin/ \
+    # Clean up the apt-get cache to reduce image size
     && rm -rf /var/lib/apt/lists/*
 
-# Create necessary directories for OpenMAINT configuration
-RUN mkdir -p $CATALINA_HOME/conf/cmdbuild/ \
-    $CATALINA_HOME/webapps/cmdbuild/ \
-    /usr/local/bin/
+# Copy all configuration and entrypoint files at once.
+# Using a single COPY command is more efficient.
+# The `--chown` flag sets the ownership correctly.
+COPY --chown=tomcat:tomcat files/ $CATALINA_HOME/
 
-# Copy configuration files into the image. Using `COPY --chown` is a good practice for setting ownership.
-COPY --chown=tomcat:tomcat files/tomcat-users.xml $CATALINA_HOME/conf/
-COPY --chown=tomcat:tomcat files/context.xml $CATALINA_HOME/webapps/manager/META-INF/
-COPY --chown=tomcat:tomcat files/database.conf $CATALINA_HOME/conf/cmdbuild/
+# Move the docker-entrypoint.sh to its correct location and set permissions.
+# The `chmod` instruction is now combined with the file move.
+# This approach is less redundant.
+RUN mv $CATALINA_HOME/docker-entrypoint.sh /usr/local/bin/ \
+    && chmod 755 /usr/local/bin/docker-entrypoint.sh
 
-# Copy the entrypoint script and make it executable in the same step using `COPY --chmod`
-# This is a more modern and efficient way to handle permissions.
-COPY --chmod=755 files/docker-entrypoint.sh /usr/local/bin/
-
-# Use a multi-line RUN command to download, unpack, and set permissions
-# This also re-locates the WAR file and sets ownership in one step.
+# Download the WAR file and unpack it
 RUN set -x \
     && wget --no-check-certificate -O /tmp/cmdbuild.war "$CMDBUILD_URL" \
     && unzip /tmp/cmdbuild.war -d $CATALINA_HOME/webapps/cmdbuild/ \
     && mv /tmp/cmdbuild.war $CATALINA_HOME/webapps/cmdbuild.war \
     && chmod +x $CATALINA_HOME/webapps/cmdbuild/cmdbuild.sh \
-    && chown -R tomcat:tomcat $CATALINA_HOME \
     && rm -f /tmp/cmdbuild.war
 
-# Use `CMD` with the ENTRYPOINT for passing default arguments
+# Set correct ownership for all files within $CATALINA_HOME
+RUN chown -R tomcat:tomcat $CATALINA_HOME
+
 # The ENTRYPOINT and CMD are split for clear separation of concerns
-# The `exec` in the entrypoint script will replace the shell process with `catalina.sh`
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 
-# The `tomcat` user is already created in the base image, so setting the `USER` here is a good practice.
+# Run the container as the non-root `tomcat` user for security
 USER tomcat
 
 # Expose the default Tomcat port
 EXPOSE 8080
 
-# This CMD acts as the default argument to the ENTRYPOINT script
+# The CMD acts as the default argument to the ENTRYPOINT script
 CMD ["catalina.sh", "run"]
