@@ -38,3 +38,4 @@ jobs:
       - name: Deploy with Docker Compose
         run: |
           docker compose up -d
+        working-directory: . # <-- FIX: This sets the working directory to the root
