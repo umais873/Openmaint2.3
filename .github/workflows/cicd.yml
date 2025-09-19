@@ -37,5 +37,5 @@ jobs:
 
       - name: Deploy with Docker Compose
         run: |
-          docker compose -f ./deploy/docker-compose.yml up -d
+          docker compose -f ./docker-compose.yml up -d
         working-directory: ./ # <-- FIX: This sets the working directory to the root
