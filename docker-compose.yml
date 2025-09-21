@@ -15,7 +15,7 @@ services:
         restart: always
 
     openmaint_app:
-        image: afcarvalho1991/cmdbuild:om-2.3-3.4.1-d
+        image: ahsand10/cmdbuild:om-2.3-3.4.1-d
         container_name: openmaint_app
         links:
            - openmaint_db
