@@ -30,10 +30,8 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
-          push: true
-          tags: |
-            ahsand10/cmdbuild:om-2.3-3.4.1-d
-            ahsand10/cmdbuild:latest
+          push: false
+          tags: local/cmdbuild:test
 
       - name: Deploy with Docker Compose
         run: |
